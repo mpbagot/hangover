@@ -51,6 +51,41 @@ void callback_init(struct callback_entry *entry, unsigned int params, void *proc
     entry->selfptr = entry;
 
     __clear_cache(&entry->ldr_self, &entry->br + 1);
+#elif __arm__
+    /* Note: A maximum of 4 parameters are supported. */
+
+    static const char wrapper_code4[] =
+    {
+        0x04, 0x40, 0x2d, 0xe5,                     /* push {r4}          - Backup r4 so that we can use it          */
+        0x10, 0xd0, 0x4d, 0xe2,                     /* sub sp, 0x10       - Allocate stack space for one value       */
+        0x10, 0x40, 0x9f, 0xe5,                     /* ldr r4, =selfptr   - Load first parameter                     */ // NOTE: Offset is 20
+        0x00, 0x40, 0x8d, 0xe5,                     /* str r4, [sp]       - Push to stack                            */
+        0x0c, 0x40, 0x9f, 0xe5,                     /* ldr r4, =host_proc - Load first parameter                     */ // NOTE: Offset is 16
+        0x14, 0xff, 0x2f, 0xe1,                     /* bx r4              - Branch into host_proc                    */
+        0x04, 0x40, 0x9d, 0xe4,                     /* pop {r4}           - Pop r4 to clean up                       */
+        0x00, 0xf0, 0x20, 0xe3,                     /* nop                - nop to fill byte count of entry->code    */
+    };
+    static const char wrapper_code3[] =
+    {
+        0x18, 0x30, 0x9f, 0xe5,                     /* ldr r3, =selfptr   - Load selfptr using relative memory load   */ // NOTE: Offset is 28
+        0x18, 0x40, 0x9f, 0xe5,                     /* ldr r4, =host_proc - Load host_proc using relative memory load */ // NOTE: Offset is 28
+        0x14, 0xff, 0x2f, 0xe1,                     /* bx r4              - Call host_proc                            */
+        0x00, 0xf0, 0x20, 0xe3,                     /* nop                - nop to fill byte count of entry->code     */
+        0x00, 0xf0, 0x20, 0xe3,                     /* nop                - nop to fill byte count of entry->code     */
+        0x00, 0xf0, 0x20, 0xe3,                     /* nop                - nop to fill byte count of entry->code     */
+        0x00, 0xf0, 0x20, 0xe3,                     /* nop                - nop to fill byte count of entry->code     */
+        0x00, 0xf0, 0x20, 0xe3,                     /* nop                - nop to fill byte count of entry->code     */
+    };
+
+    if (params == 4)
+    {
+        memcpy(entry->code, wrapper_code4, sizeof(wrapper_code4));
+    }
+    else if (params == 3)
+    {
+        memcpy(entry->code, wrapper_code3, sizeof(wrapper_code3));
+    }
+    entry->selfptr = entry;
 #elif defined(__x86_64__)
     /* See init_reverse_wndproc in dlls/user32/main.c for details. The only difference
      * is the offset of the function to call with the extra parameter. */
@@ -146,4 +181,3 @@ BOOL callback_is_in_table(const struct callback_entry_table *table, const struct
     return (ULONG_PTR)entry >= (ULONG_PTR)&table->entries[0]
             && (ULONG_PTR)entry <= (ULONG_PTR)&table->entries[table->entry_size * table->count];
 }
-

@@ -28,6 +28,8 @@ struct callback_entry
     int32_t ldr_self;
     int32_t ldr_proc;
     int32_t br;
+#elif defined(__arm__)
+    char code[0x20];
 #elif defined(__x86_64__)
     char code[0x20];
 #endif
@@ -50,4 +52,3 @@ static inline uint64_t callback_get_guest_proc(const struct callback_entry *call
 }
 
 #endif
-
