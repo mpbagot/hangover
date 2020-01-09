@@ -174,7 +174,7 @@ build/dlls64/%/Makefile:
 	echo "SRCDIR=../../../dlls/$(DLL)" >> $@
 	echo "DESTDIR?=../../.." >> $@
 	echo "GUEST_BIT=64" >> $@
-	echo "HOST_BIT=64" >> $@
+	echo "HOST_BIT=$(getconf LONG_BIT)" >> $@
 	echo "WINE_DIR=wine-guest" >> $@
 	echo "EXTRALIBS=-lpthread" >> $@
 	echo >> $@
@@ -188,7 +188,7 @@ build/dlls32/%/Makefile:
 	echo "SRCDIR=../../../dlls/$(DLL)" >> $@
 	echo "DESTDIR?=../../.." >> $@
 	echo "GUEST_BIT=32" >> $@
-	echo "HOST_BIT=64" >> $@
+	echo "HOST_BIT=$(getconf LONG_BIT)" >> $@
 	echo "WINE_DIR=wine-guest32" >> $@
 	echo "EXTRALIBS=-lpthread" >> $@
 	echo >> $@
