@@ -222,7 +222,7 @@ WINBASEAPI WINBOOL WINAPI IsValidDevmodeA(PDEVMODEA pDevMode, size_t size)
 
 #else
 
-extern BOOL WINAPI IsValidDevmodeA(PDEVMODEA pDevMode, size_t size);
+extern BOOL WINAPI IsValidDevmodeA(PDEVMODEA pDevMode, SIZE_T size);
 void qemu_IsValidDevmodeA(struct qemu_syscall *call)
 {
     struct qemu_IsValidDevmodeA *c = (struct qemu_IsValidDevmodeA *)call;
@@ -256,7 +256,7 @@ WINBASEAPI WINBOOL WINAPI IsValidDevmodeW(PDEVMODEW pDevMode, size_t size)
 
 #else
 
-extern BOOL WINAPI IsValidDevmodeW(PDEVMODEW pDevMode, size_t size);
+extern BOOL WINAPI IsValidDevmodeW(PDEVMODEW pDevMode, SIZE_T size);
 void qemu_IsValidDevmodeW(struct qemu_syscall *call)
 {
     struct qemu_IsValidDevmodeW *c = (struct qemu_IsValidDevmodeW *)call;

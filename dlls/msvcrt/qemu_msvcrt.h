@@ -2991,7 +2991,7 @@ int (* CDECL p__unloaddll)(intptr_t dll);
 void * (* CDECL p__getdllprocaddr)(intptr_t dll, const char *name, int ordinal);
 int (* CDECL p__getpid)(void);
 int (* CDECL p__crtTerminateProcess)(UINT exit_code);
-int (* CDECL p__open)(const char *path, int flags, ...);
+int (* WINAPIV p__open)(const char *path, int flags, ...);
 
 thread_data_t* (* CDECL p__getptd)(void);
 void (* CDECL p__endthread)(void);

@@ -608,13 +608,13 @@ int CDECL MSVCRT_wprintf(const WCHAR *format, ...)
 struct printf_data
 {
     void *file;
-    void *fmt; 
+    void *fmt;
     __int64 options;
     MSVCRT__locale_t locale;
     uint64_t op;
 };
 
-static uint64_t CDECL printf_wrapper(void *ctx, ...)
+static uint64_t WINAPIV printf_wrapper(void *ctx, ...)
 {
     __ms_va_list list;
     const struct printf_data *data = ctx;
@@ -952,7 +952,7 @@ struct sprintf_data
     void *fmt;
 };
 
-static uint64_t CDECL sprintf_wrapper(void *ctx, ...)
+static uint64_t WINAPIV sprintf_wrapper(void *ctx, ...)
 {
     __ms_va_list list;
     const struct sprintf_data *data = ctx;
@@ -5923,7 +5923,7 @@ struct qemu__open
 
 #ifdef QEMU_DLL_GUEST
 
-int CDECL MSVCRT__open(const char *path, int flags, ...)
+int WINAPIV MSVCRT__open(const char *path, int flags, ...)
 {
     struct qemu__open call;
     va_list list;
