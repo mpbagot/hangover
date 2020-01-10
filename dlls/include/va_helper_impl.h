@@ -113,6 +113,8 @@ __ASM_GLOBAL_FUNC( call_va_asm,
 
 #elif __arm__
 
+// NOTE Variadic functions never use the VFP registers, even if passing float values
+
 extern int CDECL call_va_asm( void *ctx, void *func, int nb_args, int nb_onstack, const void *args );
 __ASM_GLOBAL_FUNC( call_va_asm,
                    "push {fp, lr}\n\t"                      /* push FP & LR */
@@ -121,77 +123,40 @@ __ASM_GLOBAL_FUNC( call_va_asm,
                    "add r5, r4, r2, lsl #4\n\t"             /* end=args+nb_args*sizeof(args[0]) */
                    "mov r10, r1\n\t"                        /* remember func */
                    "mov r11, r4\n\t"                        /* remember args */
+                   "mov r8, #0\n\t"                         /* init align */
                    "mov r7, #0\n\t"                         /* init arg counter */
-                   "mov r8, #0\n\t"                         /* init float arg counter */
                    "mov r4, #0\n\t"                         /* init stack arg counter */
                    "cmp r3, #0\n\t"                         /* if nb_onstack == 0 goto 1 */
                    "beq 1f\n\t"
                    "lsl r3, #3\n\t"                         /* nb_onstack *= 8 */
                    "add r3, #0x20\n\t"                      /* align helper */
                    "and r3, #0xfffffff0\n\t"                /* align */
-                   "add r3, #8\n\t"                         /* Allocate two words on the top of the stack for align and stack arg counter */
                    "sub sp, r3\n\t"                         /* allocate space on stack for later */
-                   "str r3, [sp, #4]\n\t"                   /* remember align on stack */
-                   "1: cmp r2, #0\n\t"                      /* if nb_args == 0 goto 4 */
-                   "beq 11f\n\t"
+                   "mov r8, r3\n\t"                         /* remember align in r8 */
+                   "1: cmp r2, #0\n\t"                      /* if nb_args == 0 goto 5 */
+                   "beq 5f\n\t"
                    /* init  done */
-                   #ifdef __ARM_PCS_VFP                     /* If the compiler expects floats to be given in hard float registers */
-                   "2: ldr r6, [r11]\n\t"                   /* is_float */
-                   "ldr r9, [r11, #4]\n\t"                  /* Load the bottom half of is_float */
-                   "orr r6, r9\n\t"
-                   "cmp r6, #0\n\t"                         /* if !is_float goto 97 */
-                   "beq 6f\n\t"
-                   "cmp r8, #8\n\t"                         /* if floats exceed 8, */
-                   "beq 9f\n\t"                             /* they need to continue on the stack */
-                   /* floats -> regs */
-                   "adr r6, 3f\n\t"                         /* different reg per arg nubmer */
-                   "add r6, r8, lsl #3\n\t"                 /* some kind of switch statement */
-                   "bx r6\n\t"
-                   "3: vldr d0, [r11, #8]\n\t"
-                   "b 4f\n\t"
-                   "vldr d1, [r11, #8]\n\t"
-                   "b 4f\n\t"
-                   "vldr d2, [r11, #8]\n\t"
-                   "b 4f\n\t"
-                   "vldr d3, [r11, #8]\n\t"
-                   "b 4f\n\t"
-                   "vldr d4, [r11, #8]\n\t"
-                   "b 4f\n\t"
-                   "vldr d5, [r11, #8]\n\t"
-                   "b 4f\n\t"
-                   "vldr d6, [r11, #8]\n\t"
-                   "b 4f\n\t"
-                   "vldr d7, [r11, #8]\n\t"
-                   "4: add r8, #1\n\t"                      /* increment the float arg counter */
-                   "b 10f\n\t"                              /* next */
-                   #else
-                   "2: nop\n\t"
-                   #endif
-                   "6: cmp r7, #1\n\t"                      /* if args exceed ctx+1, */
-                   "beq 9f\n\t"                             /* they need to continue on the stack */
+                   "2: cmp r7, #1\n\t"                      /* if args exceed ctx+1, */
+                   "beq 3f\n\t"                             /* they need to continue on the stack */
                    /* ints -> reg */
                    "ldr r2, [r11, #8]\n\t"                  /* 64 bit values span 2 registers */
                    "ldr r3, [r11, #12]\n\t"                 /* So, only one int arg can be passed in */
                    "add r7, #1\n\t"                         /* increment the arg counter */
-                   "b 10f\n\t"                              /* next */
+                   "b 4f\n\t"                               /* next */
 
                    /* args -> stack */
-                   "9: add r6, sp, r4, lsl #3\n\t"          /* pos = 8 * stack arg count + SP */
-                   "add r6, #8\n\t"                         /* Add 8 to the pos to prevent overwriting stack arg count and align */
+                   "3: add r6, sp, r4, lsl #3\n\t"          /* pos = 8 * stack arg count + SP */
                    "ldr r9, [r11, #8]\n\t"                  /* load the top word of the value */
                    "str r9, [r6]\n\t"                       /* store it at the calculated position */
                    "ldr r9, [r11, #12]\n\t"                 /* load the bottom word of the value */
                    "str r9, [r6, #4]\n\t"                   /* store it at the calculated position */
                    "add r4, #1\n\t"                         /* increment the stack arg counter */
 
-                   "10: add r11, #0x10\n\t"                 /* next in args */
+                   "4: add r11, #0x10\n\t"                  /* next in args */
                    "cmp r11, r5\n\t"                        /* end? */
                    "bne 2b\n\t"                             /* if not, loop */
-                   "11: ldr r6, [sp, #4]\n\t"               /* Load the align count from the stack before calling func */
-                   "add sp, #8\n\t"                         /* Remove the align count offset from sp */
-                   "blx r10\n\t"                            /* call func */
-                   "sub sp, #8\n\t"                         /* Revert sp to ensure stack restoration works */
-                   "add sp, r6\n\t"                         /* restore stack */
+                   "5: blx r10\n\t"                         /* call func */
+                   "add sp, r8\n\t"                         /* restore stack */
                    "pop {r4-r11}\n\t"                       /* pop local regs */
                    "pop {fp, lr}\n\t"                       /* pop FP & LR */
                    "bx lr\n\t" )
@@ -437,6 +402,7 @@ uint64_t CDECL call_va2(uint64_t (* CDECL func)(void *fixed1, void *fixed2, ...)
 #elif __arm__
 
 extern int CDECL call_va_asm2( void *fixed1, void *fixed2, void *func, int nb_args, int nb_onstack, const void *args );
+
 __ASM_GLOBAL_FUNC( call_va_asm2,
                    "push {fp, lr}\n\t"                      /* push FP & LR */
                    "push {r4-r11}\n\t"                      /* push some regs we'll use */
@@ -445,76 +411,39 @@ __ASM_GLOBAL_FUNC( call_va_asm2,
                    "mov r10, r2\n\t"                        /* remember func */
                    "add r5, r4, r3, lsl #4\n\t"             /* end=args+nb_args*sizeof(args[0]) */
                    "mov r7, #0\n\t"                         /* init arg counter */
-                   "mov r8, #0\n\t"                         /* init float arg counter */
+                   "mov r8, #0\n\t"                         /* init align */
                    "cmp r4, #0\n\t"                         /* if nb_onstack == 0 goto 1 */
                    "beq 1f\n\t"
                    "lsl r4, #3\n\t"                         /* nb_onstack *= 8 */
                    "add r4, #0x20\n\t"                      /* align helper */
                    "and r4, #0xfffffff0\n\t"                /* align */
-                   "add r4, #8\n\t"                         /* Allocate two words on the top of the stack for align and stack arg counter */
                    "sub sp, r4\n\t"                         /* allocate space on stack for later */
-                   "str r4, [sp, #4]\n\t"                   /* remember align on stack */
+                   "mov r8, r4\n\t"                         /* remember align in r8 */
                    "mov r4, #0\n\t"                         /* Init stack arg counter */
-                   "1: cmp r3, #0\n\t"                      /* if nb_args == 0 goto 4 */
-                   "beq 11f\n\t"
+                   "1: cmp r3, #0\n\t"                      /* if nb_args == 0 goto 5 */
+                   "beq 5f\n\t"
                    /* init  done */
-                   #ifdef __ARM_PCS_VFP                     /* If the compiler expects floats to be given in hard float registers */
-                   "2: ldr r6, [r11]\n\t"                   /* is_float */
-                   "ldr r9, [r11, #4]\n\t"                  /* Load the bottom half of is_float */
-                   "orr r6, r9\n\t"
-                   "cmp r6, #0\n\t"                         /* if !is_float goto 97 */
-                   "beq 6f\n\t"
-                   "cmp r8, #8\n\t"                         /* if floats exceed 8, */
-                   "beq 9f\n\t"                             /* they need to continue on the stack */
-                   /* floats -> regs */
-                   "adr r6, 3f\n\t"                         /* different reg per arg nubmer */
-                   "add r6, r8, lsl #3\n\t"                 /* some kind of switch statement */
-                   "bx r6\n\t"
-                   "3: vldr d0, [r11, #8]\n\t"
-                   "b 4f\n\t"
-                   "vldr d1, [r11, #8]\n\t"
-                   "b 4f\n\t"
-                   "vldr d2, [r11, #8]\n\t"
-                   "b 4f\n\t"
-                   "vldr d3, [r11, #8]\n\t"
-                   "b 4f\n\t"
-                   "vldr d4, [r11, #8]\n\t"
-                   "b 4f\n\t"
-                   "vldr d5, [r11, #8]\n\t"
-                   "b 4f\n\t"
-                   "vldr d6, [r11, #8]\n\t"
-                   "b 4f\n\t"
-                   "vldr d7, [r11, #8]\n\t"
-                   "4: add r8, #1\n\t"                      /* increment the float arg counter */
-                   "b 10f\n\t"                              /* next */
-                   #else
-                   "2: nop\n\t"
-                   #endif
-                   "6: cmp r7, #1\n\t"                      /* if args exceed file+fmt+1, */
-                   "beq 9f\n\t"                            /* they need to continue on the stack */
+                   "2: cmp r7, #1\n\t"                      /* if args exceed file+fmt+1, */
+                   "beq 3f\n\t"                             /* they need to continue on the stack */
                    /* ints -> reg */
                    "ldr r2, [r11, #8]\n\t"                  /* 64 bit values span 2 registers */
                    "ldr r3, [r11, #12]\n\t"                 /* So, only one int arg can be passed in */
                    "add r7, #1\n\t"                         /* increment the arg counter */
-                   "b 10f\n\t"                              /* next */
+                   "b 4f\n\t"                               /* next */
 
                    /* args -> stack */
-                   "9: add r6, sp, r4, lsl #3\n\t"          /* pos = 8 * stack arg count + SP */
-                   "add r6, #8\n\t"                         /* Add 8 to the pos to prevent overwriting stack arg count and align */
+                   "3: add r6, sp, r4, lsl #3\n\t"          /* pos = 8 * stack arg count + SP */
                    "ldr r9, [r11, #8]\n\t"                  /* load the top word of the value */
                    "str r9, [r6]\n\t"                       /* store it at the calculated position */
                    "ldr r9, [r11, #12]\n\t"                 /* load the bottom word of the value */
                    "str r9, [r6, #4]\n\t"                   /* store it at the calculated position */
                    "add r4, #1\n\t"                         /* increment the stack arg counter */
 
-                   "10: add r11, #0x10\n\t"                 /* next in args */
+                   "4: add r11, #0x10\n\t"                  /* next in args */
                    "cmp r11, r5\n\t"                        /* end? */
                    "bne 2b\n\t"                             /* if not, loop */
-                   "11: ldr r6, [sp, #4]\n\t"               /* Load the align count from the stack before calling func */
-                   "add sp, #8\n\t"                         /* Remove the align count and stack arg count from sp */
-                   "blx r10\n\t"                            /* call func */
-                   "sub sp, #8\n\t"                         /* Revert sp to ensure stack restoration works */
-                   "add sp, r6\n\t"                         /* restore stack */
+                   "5: blx r10\n\t"                         /* call func */
+                   "add sp, r8\n\t"                         /* restore stack */
                    "pop {r4-r11}\n\t"                       /* pop local regs */
                    "pop {fp, lr}\n\t"                       /* pop FP & LR */
                    "bx lr\n\t" )
